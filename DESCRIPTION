@@ -1,0 +1,33 @@
+Package: speedy
+Title: Marine species distribution summaries using OBIS, GBIF, and WoRMS
+Version: 0.0.1
+Authors@R: c(
+    person("Pieter", "Provoost", , "pieterprovoost@gmail.com", c("cre", "aut")),
+    person("Silas", "Principe", , "s.principe@unesco.org", role = "aut")
+  )
+Description: Marine species distribution summaries using OBIS, GBIF, and WoRMS.
+License: License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+URL: https://github.com/iobis/speedy
+BugReports: https://github.com/iobis/speedy/issues
+Imports:
+  httr,
+  glue,
+  dplyr,
+  sf,
+  geojsonsf,
+  stringr,
+  jsonlite,
+  worrms,
+  tibble,
+  rmapshaper,
+  mapview,
+  rgbif,
+  tidyr,
+  purrr,
+  stars,
+  sdmpredictors,
+  ks,
+  ggplot2

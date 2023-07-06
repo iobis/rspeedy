@@ -1,0 +1,48 @@
+---
+title: "README"
+output:
+  md_document:
+    variant: gfm
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.path = "images/")
+```
+
+# speedy
+
+This package fetches and summarizes marine species distributions based on OBIS, GBIF, and WoRMS. It also calculates thermal envelopes using Bio-ORACLE sea surface temperature data.
+
+## Installation
+
+```{r, eval=FALSE}
+remotes::install_github("iobis/speedy")
+```
+
+## Summary distribution map
+
+```{r didemnum, message=FALSE, warning=FALSE, fig.height=7, fig.width=12, dpi=300}
+library(speedy)
+
+scientificname <- "Didemnum perlucidum"
+didemnum <- get_dist(scientificname = scientificname)
+plot_dist(didemnum, title = scientificname)
+```
+
+```{r eriocheir, message=FALSE, warning=FALSE, fig.height=7, fig.width=12, dpi=300}
+scientificname <- "Eriocheir sinensis"
+eriocheir <- get_dist(scientificname = scientificname)
+plot_dist(eriocheir, title = scientificname)
+```
+
+## Temperature envelope
+
+```{r didemnum_kde, message=FALSE, warning=FALSE, fig.height=6, fig.width=10, dpi=300}
+plot_kd(didemnum$envelope)
+```
+
+```{r eriocheir_kde, message=FALSE, warning=FALSE, fig.height=6, fig.width=10, dpi=300}
+plot_kd(eriocheir$envelope)
+```
