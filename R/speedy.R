@@ -2,7 +2,7 @@
 #'
 #' @docType package
 #' @name speedy
-#' @import dplyr httr sf glue geojsonsf stringr worrms tibble rmapshaper mapview rgbif tidyr purrr stars sdmpredictors ks ggplot2
+#' @import dplyr httr sf glue geojsonsf stringr worrms tibble rmapshaper mapview rgbif tidyr purrr stars sdmpredictors ks ggplot2 nngeo eks
 #' @author Pieter Provoost, \email{p.provoost@unesco.org}
 #' @author Silas Principe
 NULL
