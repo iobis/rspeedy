@@ -2,4 +2,7 @@
 .DS_Store
 .Rproj
 .Rhistory
+.env
+env.txt
+storr
 

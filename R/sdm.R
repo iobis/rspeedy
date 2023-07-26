@@ -39,29 +39,53 @@ plot_kd <- function(envelope) {
 
 #' @export
 get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL) {
-  taxonomy <- resolve_taxonomy(scientificname, aphiaid, taxonkey)
-  stopifnot(is.numeric(taxonomy$aphiaid) & is.numeric(taxonomy$taxonkey))
+  taxonomy <- insistent_resolve_taxonomy(scientificname, aphiaid, taxonkey)
+  stopifnot(is.numeric(taxonomy$aphiaid) | is.numeric(taxonomy$taxonkey))
 
   variable <- "BO22_tempmean_ss"
   points_per_m2 <- 1 / 300000000
   max_points <- 10000
   kde_bandwidth <- 0.8
+  min_area <- units::set_units(2000000000, m^2)
+  min_temperatures <- 3
 
-  obis_dist <- get_obis_dist(aphiaid = taxonomy$aphiaid, res = 4)
-  gbif_dist <- get_gbif_dist(taxonkey = taxonomy$taxonkey, zoom = 2, square_size = 8)
+  if (!is.null(taxonomy$aphiaid)) {
+    obis_dist <- get_obis_dist(aphiaid = taxonomy$aphiaid, res = 4)
+  } else {
+    obis_dist <- NULL
+  }
+  if (!is.null(taxonomy$taxonkey)) {
+    gbif_dist <- get_gbif_dist(taxonkey = taxonomy$taxonkey, zoom = 2, square_size = 8)
+  } else {
+    gbif_dist <- NULL
+  }
 
-  dist <- bind_rows(obis_dist, gbif_dist) %>%
+  dist_combined <- rbind(obis_dist, gbif_dist)
+  if (nrow(dist_combined) == 0) {
+    return(NULL)
+  }
+  dist <- dist_combined %>%
     st_union() %>%
     st_make_valid()
 
-  n <- min(max_points, round(st_area(dist) * points_per_m2))
+  # TODO: subtract environmental layer from dist
+
+  area <- st_area(dist)
+  if (area < min_area) {
+    return(NULL)
+  }
+  n <- min(max_points, round(area * points_per_m2))
   points <- st_sample(dist, n)
 
   env <- load_layers(variable) %>%
     st_as_stars()
 
   temperatures <- st_extract(env, points) %>% pull(variable) %>% na.omit() %>% as.vector()
+  if (length(temperatures) < min_temperatures) {
+    return(NULL)
+  }
   kd <- ks::kde(temperatures, h = kde_bandwidth)
+
   percentiles <- qkde(c(0.01, 0.99), kd)
 
   masked <- env

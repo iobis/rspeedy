@@ -28,13 +28,13 @@ library(speedy)
 
 scientificname <- "Didemnum perlucidum"
 didemnum <- get_dist(scientificname = scientificname)
-plot_dist(didemnum, title = scientificname)
+plot_dist(didemnum)
 ```
 
 ```{r eriocheir, message=FALSE, warning=FALSE, fig.height=7, fig.width=12, dpi=300}
 scientificname <- "Eriocheir sinensis"
 eriocheir <- get_dist(scientificname = scientificname)
-plot_dist(eriocheir, title = scientificname)
+plot_dist(eriocheir)
 ```
 
 ## Temperature envelope
@@ -45,4 +45,11 @@ plot_kd(didemnum$envelope)
 
 ```{r eriocheir_kde, message=FALSE, warning=FALSE, fig.height=6, fig.width=10, dpi=300}
 plot_kd(eriocheir$envelope)
+```
+
+## Plausibility map
+
+```{r plausibility, message=FALSE, warning=FALSE, fig.height=7, fig.width=12, dpi=300}
+pl_eriocheir <- calculate_plausibility(eriocheir)
+plot_plausibility(pl_eriocheir)
 ```

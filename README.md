@@ -17,7 +17,7 @@ library(speedy)
 
 scientificname <- "Didemnum perlucidum"
 didemnum <- get_dist(scientificname = scientificname)
-plot_dist(didemnum, title = scientificname)
+plot_dist(didemnum)
 ```
 
 ![](images/didemnum-1.png)<!-- -->
@@ -25,7 +25,7 @@ plot_dist(didemnum, title = scientificname)
 ``` r
 scientificname <- "Eriocheir sinensis"
 eriocheir <- get_dist(scientificname = scientificname)
-plot_dist(eriocheir, title = scientificname)
+plot_dist(eriocheir)
 ```
 
 ![](images/eriocheir-1.png)<!-- -->
@@ -43,3 +43,12 @@ plot_kd(eriocheir$envelope)
 ```
 
 ![](images/eriocheir_kde-1.png)<!-- -->
+
+## Plausibility map
+
+``` r
+pl_eriocheir <- calculate_plausibility(eriocheir)
+plot_plausibility(pl_eriocheir)
+```
+
+![](images/plausibility-1.png)<!-- -->
