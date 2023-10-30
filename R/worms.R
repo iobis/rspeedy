@@ -1,21 +1,30 @@
+#' Get geometry by MRGID.
+#'
+#' @export
+fetch_geom <- function(mrgid) {
+  message(glue("Fetching geom for mrgid {mrgid}"))
+  url <- glue::glue("https://marineregions.org/rest/getGazetteerGeometries.jsonld/{mrgid}/")
+  geom <- jsonlite::fromJSON(url)$"mr:hasGeometry"$"gsp:asWKT"
+  if (is.null(geom)) {
+    return(st_sfc(st_polygon()))
+  } else {
+    geom_fixed <- stringr::str_replace(geom, "<.*>\\s+", "")
+    geom_fixed <- geom_fixed[geom_fixed != ""]
+    geom_union <- st_union(st_as_sfc(geom_fixed))
+    return(geom_union)
+  }
+}
+
+#' Get geometries by MRGID (cached).
+#'
+#' @export
+fetch_geom_cached <- memoise::memoise(fetch_geom)
+
 #' Get geometries by MRGID.
 #'
 #' @export
 mr_geometries <- function(mrgids) {
-  geoms <- sapply(mrgids, function(mrgid) {
-    message(glue("Fetching geom for mrgid {mrgid}"))
-    url <- glue::glue("https://marineregions.org/rest/getGazetteerGeometries.jsonld/{mrgid}/")
-    geom <- jsonlite::fromJSON(url)$"mr:hasGeometry"$"gsp:asWKT"
-    if (is.null(geom)) {
-      return(st_sfc(st_polygon()))
-    } else {
-      geom_fixed <- stringr::str_replace(geom, "<.*>\\s+", "")
-      geom_fixed <- geom_fixed[geom_fixed != ""]
-      geom_union <- st_union(st_as_sfc(geom_fixed))
-      return(geom_union)
-    }
-  })
-  geoms
+  sapply(mrgids, fetch_geom_cached)
 }
 
 worms_geoms_by_aphiaid <- function(aphiaid) {
@@ -63,6 +72,7 @@ get_all_aphiaids_by_aphiaid <- function(aphiaid) {
 get_worms_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL) {
   taxonomy <- insistent_resolve_taxonomy(scientificname, aphiaid, taxonkey)
   stopifnot(is.numeric(taxonomy$aphiaid))
+  message(glue("Generating dist for aphiaid {aphiaid}"))
   sf_use_s2(FALSE)
 
   aphiaids <- get_all_aphiaids_by_aphiaid(taxonomy$aphiaid)
@@ -88,7 +98,8 @@ get_worms_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NUL
     nngeo::st_remove_holes(max_area = 500000000)
 
   dist_simplified <- dist_grouped %>%
-    ms_simplify(keep_shapes = TRUE, snap = FALSE)
+    ms_simplify(keep_shapes = TRUE, snap = FALSE) %>%
+    st_make_valid()
 
   dist_alien <- dist_simplified %>%
     filter(establishmentMeans == "Alien")

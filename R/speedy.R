@@ -2,7 +2,7 @@
 #'
 #' @docType package
 #' @name speedy
-#' @import dplyr httr sf glue geojsonsf stringr worrms tibble rmapshaper mapview rgbif tidyr purrr stars sdmpredictors ks ggplot2 nngeo eks
+#' @import dplyr httr sf glue geojsonsf stringr worrms tibble rmapshaper mapview rgbif tidyr purrr stars sdmpredictors ks ggplot2 nngeo eks memoise jsonlite
 #' @author Pieter Provoost, \email{p.provoost@unesco.org}
 #' @author Silas Principe
 NULL
@@ -85,13 +85,63 @@ plot_dist <- function(dist) {
 }
 
 #' @export
-export_dist <- function(dist, file) {
-  st_write(dist$obis, file, "obis", driver = "GPKG", delete_dsn = TRUE)
-  st_write(dist$gbif, file, "gbif", append = TRUE, driver = "GPKG")
-  st_write(dist$worms, file, "worms", append = TRUE, driver = "GPKG")
+export_dist <- function(dist, file, quiet = TRUE) {
+  st_write(dist$obis, file, "obis", driver = "GPKG", delete_dsn = TRUE, quiet = quiet)
+  st_write(dist$gbif, file, "gbif", append = TRUE, driver = "GPKG", quiet = quiet)
+  st_write(dist$worms, file, "worms", append = TRUE, driver = "GPKG", quiet = quiet)
   if (!is.null(dist$envelope)) {
-    st_write(dist$envelope$envelope, file, "envelope", append = TRUE, driver = "GPKG")
+    st_write(dist$envelope$envelope, file, "envelope", append = TRUE, driver = "GPKG", quiet = quiet)
   }
+}
+
+#' @export
+generate_jsonld <- function(aphiaid, s3_root) {
+  speedy_version <- as.character(packageVersion("speedy"))
+  title <- glue("Species distribution for AphiaID {aphiaid} generated with the speedy R package version {speedy_version}")
+  time <- format(Sys.time(), format = "%Y-%m-%dT%H:%M:%S")
+
+  list(
+    "@context" = unbox("https://w3id.org/ro/crate/1.1/context"),
+    "@graph" = list(
+      list(
+        "@type" = unbox("CreativeWork"),
+        "@id" = unbox("ro-crate-metadata.json"),
+        "conformsTo" = list("@id" = unbox("https://w3id.org/ro/crate/1.1")),
+        "about" = list("@id" = unbox("./"))
+      ),
+      list(
+        "@id" = unbox("./"),
+        "@type" = unbox("Dataset"),
+        "name" = unbox(title),
+        "description" = unbox(title),
+        "datePublished" = unbox(time),
+        "license" = unbox("https://creativecommons.org/licenses/by/4.0/"),
+        "hasPart" = list(
+          list("@id" = unbox("speedy.gpkg")),
+          list("@id" = unbox("speedy.png"))
+        )
+      ),
+      list(
+        "@id" = unbox("speedy.gpkg"),
+        "@type" = unbox("File"),
+        "name" = unbox("GeoPackage"),
+        "url" = unbox(glue("{s3_root}/{aphiaid}/speedy.gpkg"))
+      ),
+      list(
+        "@id" = unbox(glue("{aphiaid}.png")),
+        "@type" = unbox("File"),
+        "name" = unbox("Distribution map"),
+        "url" = unbox(glue("{s3_root}/{aphiaid}/speedy.png"))
+      ),
+      list(
+        "@id" = unbox("https://github.com/iobis/speedy"),
+        "@type" = unbox("SoftwareApplication"),
+        "url" = unbox("https://github.com/iobis/speedy"),
+        "name" = unbox("speedy"),
+        "version" = unbox(speedy_version)
+      )
+    )
+  )
 }
 
 #' @export
@@ -104,19 +154,26 @@ upload_dist_s3 <- function(dist) {
   tmp <- tempdir()
   file_gpkg <- file.path(tmp, "speedy.gpkg")
   file_png <- file.path(tmp, "speedy.png")
+  file_meta <- file.path(tmp, "ro-crate-metadata.json")
 
   export_dist(dist, file_gpkg)
   plot_dist(dist) + ggtitle(dist$taxonomy$scientificname)
   ggsave(file_png, height = 7, width = 12, dpi = 300, bg = "white")
 
+  s3_root <- glue("https://obis-products.s3.amazonaws.com/speedy")
+  jsonld <- generate_jsonld(aphiaid, s3_root)
+  meta_json <- prettify(toJSON(jsonld))
+  write(meta_json, file_meta)
+
   s3_base <- glue("speedy/{aphiaid}")
   delete_object(s3_base, bucket = "obis-products")
   put_object(file = file_gpkg, object = glue("{s3_base}/speedy.gpkg"), bucket = "obis-products")
   put_object(file = file_png, object = glue("{s3_base}/speedy.png"), bucket = "obis-products")
+  put_object(file = file_meta, object = glue("{s3_base}/ro-crate-metadata.json"), bucket = "obis-products")
 }
 
 #' @export
-download_dist_s3 <- function(aphiaid) {
+download_dist_s3 <- function(aphiaid, quiet = TRUE) {
   library("aws.s3")
   stopifnot(is.numeric(aphiaid))
   taxonomy <- insistent_resolve_taxonomy(aphiaid = aphiaid)
@@ -126,25 +183,25 @@ download_dist_s3 <- function(aphiaid) {
   save_object(object = glue("{s3_base}/speedy.gpkg"), bucket = "obis-products", file = file_gpkg)
 
   dist_obis <- tryCatch({
-    st_read(file_gpkg, layer = "obis")
+    st_read(file_gpkg, layer = "obis", quiet = quiet)
   }, error = function(err) {
     message(err)
     empty_sf()
   })
   dist_gbif <- tryCatch({
-    st_read(file_gpkg, layer = "gbif")
+    st_read(file_gpkg, layer = "gbif", quiet = quiet)
   }, error = function(err) {
     message(err)
     empty_sf()
   })
   dist_worms <- tryCatch({
-    st_read(file_gpkg, layer = "worms")
+    st_read(file_gpkg, layer = "worms", quiet = quiet)
   }, error = function(err) {
     message(err)
     empty_sf()
   })
   envelope <- tryCatch({
-    st_read(file_gpkg, layer = "envelope")
+    st_read(file_gpkg, layer = "envelope", quiet = quiet)
   }, error = function(err) {
     message(err)
     empty_sf()
@@ -154,7 +211,7 @@ download_dist_s3 <- function(aphiaid) {
     obis = dist_obis,
     gbif = dist_gbif,
     worms = dist_worms,
-    envelope = envelope
+    envelope = list(envelope = envelope)
   )
 
   return(dist)

@@ -4,7 +4,7 @@ calculate_plausibility <- function(dist, buffer = 1) {
 
   geom_range <- c(st_geometry(dist$obis), st_geometry(dist$gbif), st_geometry(dist$worms)) %>%
     st_union() %>%
-    st_buffer(1) %>%
+    st_buffer(buffer) %>%
     st_crop(st_as_sfc(st_bbox(c(xmin = -180, xmax = 180, ymin = -90, ymax = 90), crs = 4326)))
   geom_env <- dist$envelope$envelope %>%
     st_difference(geom_range) %>%
