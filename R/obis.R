@@ -8,9 +8,6 @@ get_obis_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL
 
   url <- glue("https://api.obis.org/occurrence/grid/{res}?taxonid={taxonomy$aphiaid}")
 
-  dist_content <- GET(URLencode(url)) %>%
-    content(as = "text")
-
   dist <- tryCatch({
     GET(URLencode(url)) %>%
       content(as = "text") %>%
