@@ -40,13 +40,13 @@ get_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL) {
     get_gbif_dist(scientificname, aphiaid, taxonkey)
   }, error = function(err) {
     message(err)
-    empty_sf()
+    vect()
   })
   obis_dist <- tryCatch({
     get_obis_dist(scientificname, aphiaid, taxonkey)
   }, error = function(err) {
     message(err)
-    empty_sf()
+    vect()
   })
   return(list(
     taxonomy = taxonomy,
@@ -215,10 +215,6 @@ download_dist_s3 <- function(aphiaid, quiet = TRUE) {
   )
 
   return(dist)
-}
-
-empty_sf <- function() {
-  st_sf(st_sfc(), crs = 4326)
 }
 
 #' @export

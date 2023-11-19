@@ -10,9 +10,9 @@ library(eks)
 #' @export
 view_envelope <- function(envelope, points = FALSE) {
   if (points) {
-    mapview(envelope$envelope) + mapview(envelope$points)
+    mapview(st_as_sf(envelope$envelope)) + mapview(st_as_sf(envelope$points))
   } else {
-    mapview(envelope$envelope)
+    mapview(st_as_sf(envelope$envelope))
   }
 }
 
@@ -46,7 +46,7 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   points_per_m2 <- 1 / 300000000
   max_points <- 10000
   kde_bandwidth <- 0.8
-  min_area <- units::set_units(2000000000, m^2)
+  min_area <- 2000000000
   min_temperatures <- 3
 
   if (!is.null(taxonomy$aphiaid)) {
@@ -59,33 +59,25 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   } else {
     gbif_dist <- NULL
   }
-
-  dist_combined <- rbind(obis_dist, gbif_dist)
-  if (nrow(dist_combined) == 0) {
-    return(NULL)
-  }
-  dist <- dist_combined %>%
-    st_union() %>%
-    st_make_valid()
-
   # TODO: subtract environmental layer from dist
+  dist <- aggregate(vect(c(obis_dist, gbif_dist)))
 
-  area <- st_area(dist)
-  if (area < min_area) {
+  surface_area <- expanse(dist, "m")
+  if (surface_area < min_area) {
     return(NULL)
   }
-  n <- min(max_points, round(area * points_per_m2))
-  points <- st_sample(dist, n)
+  n_points <- min(max_points, round(surface_area * points_per_m2))
+  # TODO: spatSample not returning expected number of points
+  points <- st_sample(st_as_sf(dist), n_points)
 
+  # TODO: convert to terra
   env <- load_layers(variable) %>%
     st_as_stars()
-
   temperatures <- st_extract(env, points) %>% pull(variable) %>% na.omit() %>% as.vector()
   if (length(temperatures) < min_temperatures) {
     return(NULL)
   }
   kd <- ks::kde(temperatures, h = kde_bandwidth)
-
   percentiles <- qkde(c(0.01, 0.99), kd)
 
   masked <- env
@@ -93,9 +85,9 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   masked[env < percentiles[1] | env > percentiles[2]] <- NA
 
   return(list(
-    envelope = st_as_sf(masked, as_points = FALSE, merge = TRUE),
+    envelope = vect(st_as_sf(masked, as_points = FALSE, merge = TRUE)),
     kd = kd,
-    points = points,
+    points = vect(points),
     percentiles = percentiles,
     temperatures = temperatures
   ))

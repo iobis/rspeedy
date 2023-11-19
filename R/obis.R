@@ -11,10 +11,11 @@ get_obis_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL
   dist <- tryCatch({
     GET(URLencode(url)) %>%
       content(as = "text") %>%
-      geojson_sf()
+      geojson_sf() %>%
+      vect()
   }, error = function(err) {
     message(err)
-    return(empty_sf())
+    return(vect())
   })
   return(dist)
 }

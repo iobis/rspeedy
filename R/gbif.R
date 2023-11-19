@@ -17,7 +17,7 @@ get_gbif_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL
     }
   })
 
-  return(do.call(rbind, tiles))
+  return(vect(do.call(rbind, tiles)))
 }
 
 #' @export
