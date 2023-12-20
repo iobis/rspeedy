@@ -1,6 +1,6 @@
 Package: speedy
 Title: Marine species distribution summaries using OBIS, GBIF, and WoRMS
-Version: 0.0.5
+Version: 0.0.6
 Authors@R: c(
     person("Pieter", "Provoost", , "pieterprovoost@gmail.com", c("cre", "aut")),
     person("Silas", "Principe", , "s.principe@unesco.org", role = "aut")
@@ -28,9 +28,12 @@ Imports:
   tidyr,
   purrr,
   stars,
-  sdmpredictors,
+  biooracler,
   ks,
   ggplot2,
   nngeo,
   eks,
-  memoise
+  memoise,
+  rappdirs,
+  cachem,
+  terra

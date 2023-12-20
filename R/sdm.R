@@ -1,11 +1,10 @@
-library(sdmpredictors)
-library(stars)
-library(ks)
-library(rgbif)
-library(mapview)
-library(tidyr)
-library(ggplot2)
-library(eks)
+# library(stars)
+# library(ks)
+# library(rgbif)
+# library(mapview)
+# library(tidyr)
+# library(ggplot2)
+# library(eks)
 
 #' @export
 view_envelope <- function(envelope, points = FALSE) {
@@ -42,7 +41,8 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   taxonomy <- insistent_resolve_taxonomy(scientificname, aphiaid, taxonkey)
   stopifnot(is.numeric(taxonomy$aphiaid) | is.numeric(taxonomy$taxonkey))
 
-  variable <- "BO22_tempmean_ss"
+  sf_use_s2(FALSE)
+
   points_per_m2 <- 1 / 300000000
   max_points <- 10000
   kde_bandwidth <- 0.8
@@ -50,17 +50,23 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   min_temperatures <- 3
 
   if (!is.null(taxonomy$aphiaid)) {
-    obis_dist <- get_obis_dist(aphiaid = taxonomy$aphiaid, res = 4)
+    obis_dist <- get_obis_dist_possibly(aphiaid = taxonomy$aphiaid, res = 4)
   } else {
     obis_dist <- NULL
   }
   if (!is.null(taxonomy$taxonkey)) {
-    gbif_dist <- get_gbif_dist(taxonkey = taxonomy$taxonkey, zoom = 2, square_size = 8)
+    gbif_dist <- get_gbif_dist_possibly(taxonkey = taxonomy$taxonkey, zoom = 2, square_size = 8)
   } else {
     gbif_dist <- NULL
   }
+  if (is.null(obis_dist) & is.null(gbif_dist)) {
+    return(NULL)
+  }
   # TODO: subtract environmental layer from dist
   dist <- aggregate(vect(c(obis_dist, gbif_dist)))
+  if (nrow(dist) == 0) {
+    return(NULL)
+  }
 
   surface_area <- expanse(dist, "m")
   if (surface_area < min_area) {
@@ -71,9 +77,9 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   points <- st_sample(st_as_sf(dist), n_points)
 
   # TODO: convert to terra
-  env <- load_layers(variable) %>%
+  env <- download_layers(dataset_id = "thetao_baseline_2000_2019_depthsurf", variables = "thetao_mean", constraints = list(time = c("2010-01-01", "2010-01-01")), fmt = "raster", directory = tempdir(), verbose = T) %>%
     st_as_stars()
-  temperatures <- st_extract(env, points) %>% pull(variable) %>% na.omit() %>% as.vector()
+  temperatures <- st_extract(env, points) %>% as.data.frame() %>% pull(1) %>% na.omit() %>% as.numeric()
   if (length(temperatures) < min_temperatures) {
     return(NULL)
   }
@@ -85,7 +91,7 @@ get_thermal_envelope <- function(scientificname = NULL, aphiaid = NULL, taxonkey
   masked[env < percentiles[1] | env > percentiles[2]] <- NA
 
   return(list(
-    envelope = vect(st_as_sf(masked, as_points = FALSE, merge = TRUE)),
+    envelope = st_as_sf(masked, as_points = FALSE, merge = TRUE),
     kd = kd,
     points = vect(points),
     percentiles = percentiles,

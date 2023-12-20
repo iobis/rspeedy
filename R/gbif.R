@@ -36,3 +36,6 @@ taxonkey_for_name <- function(scientificname) {
     return(NULL)
   }
 }
+
+get_gbif_dist_safely <- safely(get_gbif_dist, otherwise = NULL)
+get_gbif_dist_possibly <- possibly(get_gbif_dist, otherwise = NULL)

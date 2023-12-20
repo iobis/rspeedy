@@ -11,6 +11,8 @@ fetch_geom <- function(mrgid) {
   }
 }
 
+fetch_geom_cached <- memoise(fetch_geom, cache = speedy_disk_cache)
+
 wm_distribution_possibly <- possibly(wm_distribution, otherwise = NULL)
 
 worms_geoms_by_aphiaid <- function(aphiaid) {
@@ -23,7 +25,7 @@ worms_geoms_by_aphiaid <- function(aphiaid) {
   dist <- dist %>%
     mutate(mrgid = str_replace_all(locationID, "http://marineregions.org/mrgid/", ""))
   res <- map(1:nrow(dist), function(i) {
-    geoms <- fetch_geom(dist$mrgid[i])
+    geoms <- fetch_geom_cached(dist$mrgid[i])
     if (!is.null(geoms)) {
       split_geoms <- c()
       for (j in 1:length(geoms)) {
@@ -45,13 +47,9 @@ worms_geoms_by_aphiaid <- function(aphiaid) {
 #' Get all synonymized AphiaIDs for an AphiaID.
 get_all_aphiaids_by_aphiaid <- function(aphiaid) {
   message(glue("Fetching aphiaids for aphiaid {aphiaid}"))
-  synonyms <- tryCatch({
-    worrms::wm_synonyms(aphiaid) %>%
-      pull(AphiaID)
-  }, error = function(err) {
-    NULL
-  })
-  aphiaids <- unique(c(aphiaid, synonyms))
+  accepted <- possibly(worrms::wm_record, otherwise = data.frame(valid_AphiaID = character(0)))(aphiaid) %>% pull(valid_AphiaID)
+  synonyms <- possibly(worrms::wm_synonyms, otherwise = data.frame(AphiaID = character(0)))(accepted) %>% pull(AphiaID)
+  aphiaids <- unique(c(aphiaid, accepted, synonyms))
   return(aphiaids)
 }
 
@@ -64,15 +62,20 @@ get_worms_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NUL
   message(glue("Generating dist for aphiaid {aphiaid}"))
 
   aphiaids <- get_all_aphiaids_by_aphiaid(taxonomy$aphiaid)
+  message("Fetching geoms for all linked aphiaids")
   dist_map <- map(aphiaids, worms_geoms_by_aphiaid)
   if (sum(sapply(dist_map, nrow)) == 0) {
     return(vect())
   }
+  message("Processing geometries")
   dist_all <- do.call(rbind, dist_map)
   dist_all <- dist_all[!is.na(dist_all$wkt) & dist_all$wkt != "",]
   wkt_vect <- map(dist_all$wkt, vect)
   which_polygons <- which(map(wkt_vect, geomtype) == "polygons")
   wkt_vect <- wkt_vect[which_polygons]
+  if (length(wkt_vect) == 0) {
+    return(vect())
+  }
   data <- dist_all[which_polygons, c("locality", "establishmentMeans")] %>% mutate(
     establishmentMeans = case_match(
       as.character(establishmentMeans),
@@ -83,18 +86,19 @@ get_worms_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NUL
   )
   combined <- vect(wkt_vect)
   values(combined) <- data
-  aggregated <- aggregate(combined, by = "establishmentMeans", dissolve = TRUE)
-  aggregated_buffered <- buffer(aggregated, 0.01)
+  simplified <- simplifyGeom(combined, tolerance = 0.002, preserveTopology = FALSE, makeValid = TRUE) # TODO: check
+  simplified_aggregated <- aggregate(disagg(simplified), by = "establishmentMeans", dissolve = TRUE)
+  simplified_aggregated_buffered <- buffer(simplified_aggregated, 0.01, quadsegs = 4)
   bbox <- vect("POLYGON ((-180 -90, -180 90, 180 90, 180 -90, -180 -90))")
-  aggregated_buffered_cropped <- crop(aggregated_buffered, bbox)
-  aggregated_buffered_cropped_noholes <- fillHoles(aggregated_buffered_cropped)
-  aggregated_buffered_cropped_noholes_simplified <- simplifyGeom(aggregated_buffered_cropped_noholes, 0.001)
-  crs(aggregated_buffered_cropped_noholes_simplified) <- "epsg:4326"
-
-  layers <- split(aggregated_buffered_cropped_noholes_simplified, "establishmentMeans")
-  names(layers) <- sapply(layers, function(x) { x$establishmentMeans })
+  simplified_aggregated_buffered_cropped <- crop(simplified_aggregated_buffered, bbox)
+  simplified_aggregated_buffered_cropped_noholes <- fillHoles(simplified_aggregated_buffered_cropped)
+  simplified_aggregated_buffered_cropped_noholes_simplified <- simplifyGeom(simplified_aggregated_buffered_cropped_noholes, 0.002)
+  crs(simplified_aggregated_buffered_cropped_noholes_simplified) <- "epsg:4326"
+  layers <- list()
+  for (establishment in simplified_aggregated_buffered_cropped_noholes_simplified$establishmentMeans) {
+    layers[[establishment]] <- simplified_aggregated_buffered_cropped_noholes_simplified[simplified_aggregated_buffered_cropped_noholes_simplified$establishmentMeans == establishment]
+  }
   layers <- layers[order(names(layers), decreasing = TRUE)]
-
   if (length(layers) > 1) {
     for (i in 2:length(layers)) {
       layers[[1]] <- cover(layers[[1]], layers[[i]])
@@ -103,6 +107,8 @@ get_worms_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NUL
 
   return(layers[[1]])
 }
+
+get_worms_dist_cached <- memoise(get_worms_dist, cache = speedy_disk_cache_short)
 
 #' Get name for AphiaID.
 #'

@@ -2,10 +2,16 @@
 #'
 #' @docType package
 #' @name speedy
-#' @import dplyr httr sf glue geojsonsf stringr worrms tibble rmapshaper mapview rgbif tidyr purrr stars sdmpredictors ks ggplot2 nngeo eks memoise jsonlite
+#' @import dplyr httr sf glue geojsonsf stringr worrms tibble rmapshaper mapview rgbif tidyr purrr stars biooracler ks ggplot2 nngeo eks memoise jsonlite memoise rappdirs cachem terra
 #' @author Pieter Provoost, \email{p.provoost@unesco.org}
 #' @author Silas Principe
 NULL
+
+cache_dir <- rappdirs::user_cache_dir("r-speedy")
+cache_dirt_short <- rappdirs::user_cache_dir("r-speedy-short")
+speedy_disk_cache <- cachem::cache_disk(cache_dir, max_size = 5*1024^3, max_age = 3600*24*30)
+speedy_disk_cache_short <- cachem::cache_disk(cache_dirt_short, max_size = 5*1024^3, max_age = 3600*24*7)
+message(glue("Caching to {cache_dir} and {cache_dirt_short}"))
 
 #' @export
 resolve_taxonomy <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL) {
@@ -36,23 +42,28 @@ resolve_taxonomy <- function(scientificname = NULL, aphiaid = NULL, taxonkey = N
 #' @export
 get_dist <- function(scientificname = NULL, aphiaid = NULL, taxonkey = NULL) {
   taxonomy <- insistent_resolve_taxonomy(scientificname, aphiaid, taxonkey)
-  gbif_dist <- tryCatch({
-    get_gbif_dist(scientificname, aphiaid, taxonkey)
-  }, error = function(err) {
-    message(err)
-    vect()
-  })
-  obis_dist <- tryCatch({
-    get_obis_dist(scientificname, aphiaid, taxonkey)
-  }, error = function(err) {
-    message(err)
-    vect()
-  })
+
+  # gbif_dist <- get_gbif_dist_safely(scientificname, aphiaid, taxonkey)$result %>% st_as_sf()
+  # obis_dist <- get_obis_dist_safely(scientificname, aphiaid, taxonkey)$result %>% st_as_sf()
+  gbif_dist_safely <- get_gbif_dist_possibly(scientificname, aphiaid, taxonkey)
+  obis_dist_safely <- get_obis_dist_possibly(scientificname, aphiaid, taxonkey)
+  if (!is.null(gbif_dist_safely)) {
+    gbif_dist <- gbif_dist_safely %>% st_as_sf()
+  } else {
+    gbif_dist <- empty_sf()
+  }
+  if (!is.null(obis_dist_safely)) {
+    obis_dist <- obis_dist_safely %>% st_as_sf()
+  } else {
+    obis_dist <- empty_sf()
+  }
+  worms_dist <- get_worms_dist(scientificname, aphiaid, taxonkey) %>% st_as_sf()
+
   return(list(
     taxonomy = taxonomy,
     obis = obis_dist,
     gbif = gbif_dist,
-    worms = get_worms_dist(scientificname, aphiaid, taxonkey),
+    worms = worms_dist,
     envelope = get_thermal_envelope(scientificname, aphiaid, taxonkey)
   ))
 }
@@ -220,3 +231,6 @@ download_dist_s3 <- function(aphiaid, quiet = TRUE) {
 #' @export
 insistent_resolve_taxonomy <- purrr::insistently(resolve_taxonomy, rate = rate_backoff(pause_base = 10, pause_cap = 300, max_times = 3), quiet = FALSE)
 
+empty_sf <- function() {
+  st_sf(st_sfc(), crs = 4326)
+}
