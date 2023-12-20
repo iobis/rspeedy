@@ -18,7 +18,7 @@ wm_distribution_possibly <- possibly(wm_distribution, otherwise = NULL)
 worms_geoms_by_aphiaid <- function(aphiaid) {
   message(glue("Fetching geoms for aphiaid {aphiaid}"))
   # TODO: buffer non polygon types
-  dist <- wm_distribution_possibly(aphiaid)
+  dist <- wm_distribution_possibly(as.numeric(aphiaid))
   if (is.null(dist)) {
     return(data.frame())
   }
