@@ -7,7 +7,7 @@ Bio-ORACLE sea surface temperature data.
 ## Installation
 
 ``` r
-remotes::install_github("iobis/speedy")
+remotes::install_github("iobis/rspeedy")
 ```
 
 ## Summary distribution map
